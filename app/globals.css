@@ -1,0 +1,177 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /*
+   * Single source of truth for the palette. The `.dark` block is the shipped
+   * theme; `:root` holds a light counterpart so the theme toggle in Settings
+   * has a real target the day we turn it on. Values are HSL *channels* (no
+   * `hsl()` wrapper) so Tailwind can compose them with opacity modifiers,
+   * e.g. `bg-primary/20`.
+   */
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --surface: 0 0% 100%;
+    --surface-raised: 240 5% 96%;
+    --surface-sunken: 240 5% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 258 90% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 6% 10%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 240 5% 96%;
+    --accent-foreground: 240 6% 10%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 258 90% 66%;
+
+    --success: 142 71% 45%;
+    --info: 217 91% 60%;
+    --warning: 25 95% 53%;
+    --danger: 0 84% 60%;
+    --violet: 258 90% 66%;
+    --indigo: 239 84% 67%;
+
+    --radius: 1rem;
+  }
+
+  .dark {
+    /* #09090B */
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    /* #111827 */
+    --surface: 221 39% 11%;
+    --surface-raised: 222 33% 14%;
+    --surface-sunken: 240 8% 6%;
+    --card: 221 39% 11%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 8% 6%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 258 90% 66%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 4% 16%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    /* #27272A */
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
+    --ring: 258 90% 66%;
+
+    --success: 142 69% 48%;
+    --info: 217 91% 60%;
+    --warning: 25 95% 53%;
+    --danger: 0 84% 60%;
+    --violet: 258 90% 66%;
+    --indigo: 239 84% 67%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Focus is never removed — only restyled. Keyboard users get the ring, mouse
+     users don't, via :focus-visible. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  ::selection {
+    @apply bg-primary/30 text-foreground;
+  }
+}
+
+@layer components {
+  /* Frosted panel used by the sidebar, header and stat panel. */
+  .glass {
+    @apply border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl;
+  }
+
+  /* Hairline top highlight that makes a flat card read as a physical surface. */
+  .sheen {
+    position: relative;
+  }
+  .sheen::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding-top: 1px;
+    background: linear-gradient(
+      180deg,
+      hsl(0 0% 100% / 0.08),
+      hsl(0 0% 100% / 0) 40%
+    );
+    -webkit-mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-br from-violet via-indigo to-violet bg-clip-text text-transparent;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+  }
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* Respect the OS "reduce motion" setting globally. Framer Motion honours this
+   too via MotionConfig, but CSS-driven animation needs its own guard. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
