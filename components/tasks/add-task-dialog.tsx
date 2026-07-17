@@ -24,65 +24,117 @@ import {
 } from "@/components/ui/select";
 import { CATEGORIES, DIFFICULTY_META, PRIORITY_META } from "@/lib/constants";
 import { useRoadmapStore } from "@/store/use-roadmap-store";
-import type { CategoryId, Difficulty, Priority } from "@/types";
+import type { CategoryId, Difficulty, Priority, Task } from "@/types";
 
 interface AddTaskDialogProps {
   /** Pre-selects a track when opened from inside a category card. */
   defaultCategoryId?: CategoryId;
   trigger?: React.ReactNode;
+  /**
+   * When provided, the dialog edits this task instead of creating one. The
+   * caller controls visibility via `open`/`onOpenChange` (typically from a
+   * task's action menu), so no trigger is rendered.
+   */
+  task?: Task;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const FIELD_LABEL = "text-xs font-medium text-muted-foreground";
 
 /**
- * Create-task flow.
+ * Create- or edit-task flow.
  *
  * Form state is local and uncommitted until submit — the store only ever sees a
- * complete, valid task, so a half-typed title can never reach localStorage.
+ * complete, valid task, so a half-typed title can never reach localStorage. Pass
+ * a `task` to switch the same form into edit mode.
  */
-export function AddTaskDialog({ defaultCategoryId, trigger }: AddTaskDialogProps) {
+export function AddTaskDialog({
+  defaultCategoryId,
+  trigger,
+  task,
+  open: controlledOpen,
+  onOpenChange,
+}: AddTaskDialogProps) {
   const addTask = useRoadmapStore((s) => s.addTask);
-  const [open, setOpen] = React.useState(false);
+  const updateTask = useRoadmapStore((s) => s.updateTask);
+  const isEdit = Boolean(task);
 
-  const [title, setTitle] = React.useState("");
-  const [description, setDescription] = React.useState("");
-  const [categoryId, setCategoryId] = React.useState<CategoryId>(
-    defaultCategoryId ?? "backend",
+  // Controlled when the caller manages visibility (edit from a menu),
+  // uncontrolled with its own trigger otherwise (the "New task" button).
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
+
+  const initial = React.useMemo(
+    () => ({
+      title: task?.title ?? "",
+      description: task?.description ?? "",
+      categoryId: task?.categoryId ?? defaultCategoryId ?? "backend",
+      difficulty: task?.difficulty ?? "intermediate",
+      priority: task?.priority ?? "medium",
+      estimatedHours: task ? String(task.estimatedHours) : "4",
+      deadline: task?.deadline ?? "",
+    }),
+    [task, defaultCategoryId],
   );
-  const [difficulty, setDifficulty] = React.useState<Difficulty>("intermediate");
-  const [priority, setPriority] = React.useState<Priority>("medium");
-  const [estimatedHours, setEstimatedHours] = React.useState("4");
-  const [deadline, setDeadline] = React.useState("");
+
+  const [title, setTitle] = React.useState(initial.title);
+  const [description, setDescription] = React.useState(initial.description);
+  const [categoryId, setCategoryId] = React.useState<CategoryId>(initial.categoryId);
+  const [difficulty, setDifficulty] = React.useState<Difficulty>(initial.difficulty);
+  const [priority, setPriority] = React.useState<Priority>(initial.priority);
+  const [estimatedHours, setEstimatedHours] = React.useState(initial.estimatedHours);
+  const [deadline, setDeadline] = React.useState(initial.deadline);
 
   const canSubmit = title.trim().length > 0;
 
-  const reset = () => {
-    setTitle("");
-    setDescription("");
-    setCategoryId(defaultCategoryId ?? "backend");
-    setDifficulty("intermediate");
-    setPriority("medium");
-    setEstimatedHours("4");
-    setDeadline("");
-  };
+  const reset = React.useCallback(() => {
+    setTitle(initial.title);
+    setDescription(initial.description);
+    setCategoryId(initial.categoryId);
+    setDifficulty(initial.difficulty);
+    setPriority(initial.priority);
+    setEstimatedHours(initial.estimatedHours);
+    setDeadline(initial.deadline);
+  }, [initial]);
+
+  // Re-seed the form whenever it opens, so editing always starts from the task's
+  // current values and creating always starts clean.
+  React.useEffect(() => {
+    if (open) reset();
+  }, [open, reset]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSubmit) return;
 
-    addTask({
-      title,
-      description,
-      categoryId,
-      difficulty,
-      priority,
-      // An empty or non-numeric field falls back to the default estimate
-      // rather than writing NaN into the store and breaking every chart.
-      estimatedHours: Number(estimatedHours) > 0 ? Number(estimatedHours) : 4,
-      deadline: deadline || null,
-    });
+    // An empty or non-numeric field falls back to the default estimate rather
+    // than writing NaN into the store and breaking every chart.
+    const hours = Number(estimatedHours) > 0 ? Number(estimatedHours) : 4;
 
-    reset();
+    if (isEdit && task) {
+      updateTask(task.id, {
+        title: title.trim(),
+        description: description.trim(),
+        categoryId,
+        difficulty,
+        priority,
+        estimatedHours: hours,
+        deadline: deadline || null,
+      });
+    } else {
+      addTask({
+        title,
+        description,
+        categoryId,
+        difficulty,
+        priority,
+        estimatedHours: hours,
+        deadline: deadline || null,
+      });
+    }
+
     setOpen(false);
   };
 
@@ -94,20 +146,26 @@ export function AddTaskDialog({ defaultCategoryId, trigger }: AddTaskDialogProps
         if (!next) reset();
       }}
     >
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <RippleButton size="icon" className="sm:w-auto sm:px-4" aria-label="Add task">
-            <Plus />
-            <span className="hidden sm:inline">New task</span>
-          </RippleButton>
-        )}
-      </DialogTrigger>
+      {!isEdit && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <RippleButton size="icon" className="sm:w-auto sm:px-4" aria-label="Add task">
+              <Plus />
+              <span className="hidden sm:inline">New task</span>
+            </RippleButton>
+          )}
+        </DialogTrigger>
+      )}
 
       <DialogContent className="max-h-[90vh] overflow-y-auto thin-scrollbar sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Add a task to your roadmap</DialogTitle>
+          <DialogTitle>
+            {isEdit ? "Edit task" : "Add a task to your roadmap"}
+          </DialogTitle>
           <DialogDescription>
-            Small, specific tasks get finished. Vague ones get postponed.
+            {isEdit
+              ? "Update the details. Progress and checklist stay as they are."
+              : "Small, specific tasks get finished. Vague ones get postponed."}
           </DialogDescription>
         </DialogHeader>
 
@@ -227,7 +285,7 @@ export function AddTaskDialog({ defaultCategoryId, trigger }: AddTaskDialogProps
             </Button>
             <RippleButton type="submit" disabled={!canSubmit}>
               <Plus />
-              Add task
+              {isEdit ? "Save changes" : "Add task"}
             </RippleButton>
           </DialogFooter>
         </form>

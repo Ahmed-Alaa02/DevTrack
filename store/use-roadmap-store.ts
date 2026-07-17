@@ -27,8 +27,14 @@ interface RoadmapState {
   setTaskProgress: (id: string, progress: number) => void;
   toggleSubtask: (taskId: string, subtaskId: string) => void;
   addSubtask: (taskId: string, title: string) => void;
+  renameSubtask: (taskId: string, subtaskId: string, title: string) => void;
   deleteSubtask: (taskId: string, subtaskId: string) => void;
   addTask: (input: NewTaskInput) => void;
+  /**
+   * Bring in tasks from an exported file. `merge` appends them after existing
+   * tasks; `replace` swaps the whole roadmap for them.
+   */
+  importTasks: (tasks: Task[], mode: "merge" | "replace") => void;
   updateTask: (id: string, patch: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   /** Persist a new manual ordering for one category (drag & drop). */
@@ -241,6 +247,24 @@ export const useRoadmapStore = create<RoadmapState>()(
           };
         }),
 
+      renameSubtask: (taskId, subtaskId, title) =>
+        set((state) => {
+          const clean = title.trim();
+          if (!clean) return state;
+          return {
+            tasks: state.tasks.map((task) =>
+              task.id === taskId
+                ? {
+                    ...task,
+                    subtasks: task.subtasks.map((s) =>
+                      s.id === subtaskId ? { ...s, title: clean } : s,
+                    ),
+                  }
+                : task,
+            ),
+          };
+        }),
+
       deleteSubtask: (taskId, subtaskId) =>
         set((state) => ({
           tasks: state.tasks.map((task) =>
@@ -275,6 +299,33 @@ export const useRoadmapStore = create<RoadmapState>()(
             completedAt: null,
           };
           return { tasks: [...state.tasks, task] };
+        }),
+
+      importTasks: (incoming, mode) =>
+        set((state) => {
+          if (mode === "replace") {
+            // Re-base order per category so a hand-edited file can't leave gaps.
+            const counters = new Map<CategoryId, number>();
+            const tasks = incoming.map((task) => {
+              const next = counters.get(task.categoryId) ?? 0;
+              counters.set(task.categoryId, next + 1);
+              return { ...task, order: next };
+            });
+            return { tasks };
+          }
+
+          // Merge: imported tasks keep their identity but are ordered after any
+          // existing siblings in the same category.
+          const counters = new Map<CategoryId, number>();
+          for (const task of state.tasks) {
+            counters.set(task.categoryId, Math.max(counters.get(task.categoryId) ?? 0, task.order + 1));
+          }
+          const appended = incoming.map((task) => {
+            const next = counters.get(task.categoryId) ?? 0;
+            counters.set(task.categoryId, next + 1);
+            return { ...task, order: next };
+          });
+          return { tasks: [...state.tasks, ...appended] };
         }),
 
       updateTask: (id, patch) =>

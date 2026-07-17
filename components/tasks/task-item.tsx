@@ -5,15 +5,18 @@ import type { DraggableAttributes } from "@dnd-kit/core";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Check,
   ChevronDown,
   ExternalLink,
   GripVertical,
   MoreHorizontal,
+  Pencil,
   Plus,
   Trash2,
   X,
 } from "lucide-react";
 
+import { AddTaskDialog } from "@/components/tasks/add-task-dialog";
 import {
   DeadlineBadge,
   DifficultyPips,
@@ -81,9 +84,11 @@ export const TaskItem = React.memo(function TaskItem({
   showCategory,
 }: TaskItemProps) {
   const [expanded, setExpanded] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
   const toggleTask = useRoadmapStore((s) => s.toggleTask);
   const toggleSubtask = useRoadmapStore((s) => s.toggleSubtask);
   const addSubtask = useRoadmapStore((s) => s.addSubtask);
+  const renameSubtask = useRoadmapStore((s) => s.renameSubtask);
   const deleteSubtask = useRoadmapStore((s) => s.deleteSubtask);
   const deleteTask = useRoadmapStore((s) => s.deleteTask);
   const fireConfetti = useConfetti();
@@ -213,6 +218,10 @@ export const TaskItem = React.memo(function TaskItem({
                   <DropdownMenuItem onSelect={handleToggle}>
                     {isDone ? "Mark as not started" : "Mark as complete"}
                   </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setEditing(true)}>
+                    <Pencil />
+                    Edit task
+                  </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setExpanded((v) => !v)}>
                     {expanded ? "Collapse" : "Expand"} details
                   </DropdownMenuItem>
@@ -265,6 +274,7 @@ export const TaskItem = React.memo(function TaskItem({
                   task={task}
                   onToggleSubtask={toggleSubtask}
                   onAddSubtask={addSubtask}
+                  onRenameSubtask={renameSubtask}
                   onDeleteSubtask={deleteSubtask}
                 />
               </motion.div>
@@ -272,6 +282,8 @@ export const TaskItem = React.memo(function TaskItem({
           </AnimatePresence>
         </div>
       </div>
+
+      <AddTaskDialog task={task} open={editing} onOpenChange={setEditing} />
     </motion.article>
   );
 });
@@ -284,11 +296,13 @@ function TaskDetails({
   task,
   onToggleSubtask,
   onAddSubtask,
+  onRenameSubtask,
   onDeleteSubtask,
 }: {
   task: Task;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onAddSubtask: (taskId: string, title: string) => void;
+  onRenameSubtask: (taskId: string, subtaskId: string, title: string) => void;
   onDeleteSubtask: (taskId: string, subtaskId: string) => void;
 }) {
   const [draft, setDraft] = React.useState("");
@@ -310,41 +324,14 @@ function TaskDetails({
         {task.subtasks.length > 0 && (
           <ul className="space-y-1.5">
             {task.subtasks.map((subtask, index) => (
-              <motion.li
+              <SubtaskRow
                 key={subtask.id}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.03, duration: 0.25, ease: EASE_OUT }}
-                className="group/subtask flex items-center gap-1"
-              >
-                <label className="flex flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-secondary/50">
-                  <Checkbox
-                    checked={subtask.done}
-                    onCheckedChange={() => onToggleSubtask(task.id, subtask.id)}
-                    className="size-4"
-                  />
-                  <span
-                    className={cn(
-                      "text-xs transition-colors",
-                      subtask.done
-                        ? "text-muted-foreground line-through"
-                        : "text-foreground/90",
-                    )}
-                  >
-                    {subtask.title}
-                  </span>
-                </label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => onDeleteSubtask(task.id, subtask.id)}
-                  aria-label={`Delete step "${subtask.title}"`}
-                  className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/subtask:opacity-100"
-                >
-                  <X className="size-3.5" />
-                </Button>
-              </motion.li>
+                subtask={subtask}
+                index={index}
+                onToggle={() => onToggleSubtask(task.id, subtask.id)}
+                onRename={(title) => onRenameSubtask(task.id, subtask.id, title)}
+                onDelete={() => onDeleteSubtask(task.id, subtask.id)}
+              />
             ))}
           </ul>
         )}
@@ -400,5 +387,117 @@ function TaskDetails({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * One checklist row. Toggling and deleting are one click; renaming swaps the
+ * label for an input in place, so editing a step never leaves the task view.
+ */
+function SubtaskRow({
+  subtask,
+  index,
+  onToggle,
+  onRename,
+  onDelete,
+}: {
+  subtask: Task["subtasks"][number];
+  index: number;
+  onToggle: () => void;
+  onRename: (title: string) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(subtask.title);
+
+  const startEditing = () => {
+    setDraft(subtask.title);
+    setEditing(true);
+  };
+
+  const commit = () => {
+    const clean = draft.trim();
+    if (clean && clean !== subtask.title) onRename(clean);
+    setEditing(false);
+  };
+
+  return (
+    <motion.li
+      initial={{ opacity: 0, x: -6 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.03, duration: 0.25, ease: EASE_OUT }}
+      className="group/subtask flex items-center gap-1"
+    >
+      {editing ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            commit();
+          }}
+          className="flex flex-1 items-center gap-1"
+        >
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setEditing(false);
+            }}
+            aria-label={`Rename step "${subtask.title}"`}
+            autoFocus
+            className="h-8 text-xs"
+          />
+          <Button
+            type="submit"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Save step"
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            <Check className="size-3.5" />
+          </Button>
+        </form>
+      ) : (
+        <>
+          <label className="flex flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-secondary/50">
+            <Checkbox
+              checked={subtask.done}
+              onCheckedChange={onToggle}
+              className="size-4"
+            />
+            <span
+              className={cn(
+                "text-xs transition-colors",
+                subtask.done
+                  ? "text-muted-foreground line-through"
+                  : "text-foreground/90",
+              )}
+            >
+              {subtask.title}
+            </span>
+          </label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={startEditing}
+            aria-label={`Rename step "${subtask.title}"`}
+            className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/subtask:opacity-100"
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={onDelete}
+            aria-label={`Delete step "${subtask.title}"`}
+            className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/subtask:opacity-100"
+          >
+            <X className="size-3.5" />
+          </Button>
+        </>
+      )}
+    </motion.li>
   );
 }

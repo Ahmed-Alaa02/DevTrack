@@ -2,7 +2,16 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Database, Moon, RotateCcw, Sun, Trash2, User } from "lucide-react";
+import {
+  Database,
+  Download,
+  Moon,
+  RotateCcw,
+  Sun,
+  Trash2,
+  Upload,
+  User,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/common/page-header";
 import { RippleButton } from "@/components/common/ripple-button";
@@ -25,7 +34,14 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { useRoadmap } from "@/hooks/use-roadmap";
 import { STORAGE_KEY } from "@/lib/constants";
 import { fadeUp, staggerContainer } from "@/lib/motion";
+import {
+  buildTaskExport,
+  exportFileName,
+  parseTaskImport,
+  TaskImportError,
+} from "@/lib/transfer";
 import { useRoadmapStore } from "@/store/use-roadmap-store";
+import type { Task } from "@/types";
 
 /**
  * Settings.
@@ -41,6 +57,7 @@ export function SettingsView() {
   const setTheme = useRoadmapStore((s) => s.setTheme);
   const resetAll = useRoadmapStore((s) => s.resetAll);
   const clearAll = useRoadmapStore((s) => s.clearAll);
+  const importTasks = useRoadmapStore((s) => s.importTasks);
   const tasks = useRoadmapStore((s) => s.tasks);
   const notes = useRoadmapStore((s) => s.notes);
   const hydrated = useHydrated();
@@ -48,6 +65,47 @@ export function SettingsView() {
   const [confirmReset, setConfirmReset] = React.useState(false);
   const [confirmClear, setConfirmClear] = React.useState(false);
   const isEmpty = tasks.length === 0 && notes.length === 0;
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [pending, setPending] = React.useState<Task[] | null>(null);
+  const [importError, setImportError] = React.useState<string | null>(null);
+
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify(buildTaskExport(tasks), null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = exportFileName();
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Reset the input so choosing the same file twice still fires onChange.
+    event.target.value = "";
+    if (!file) return;
+
+    setImportError(null);
+    try {
+      const parsed = parseTaskImport(await file.text());
+      setPending(parsed);
+    } catch (error) {
+      setImportError(
+        error instanceof TaskImportError
+          ? error.message
+          : "Couldn't read that file.",
+      );
+    }
+  };
+
+  const runImport = (mode: "merge" | "replace") => {
+    if (!pending) return;
+    importTasks(pending, mode);
+    setPending(null);
+  };
 
   if (!hydrated) {
     return (
@@ -192,6 +250,44 @@ export function SettingsView() {
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
+                <p className="text-sm font-medium">Export / import tasks</p>
+                <p className="text-xs text-muted-foreground">
+                  Save your tasks to a file, or load a file someone shared so you both
+                  work from the same roadmap.
+                </p>
+                {importError && (
+                  <p className="mt-2 text-xs text-destructive" role="alert">
+                    {importError}
+                  </p>
+                )}
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={handleExport}
+                  disabled={tasks.length === 0}
+                >
+                  <Download />
+                  Export
+                </Button>
+                <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
+                  <Upload />
+                  Import
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </div>
+            </div>
+
+            <Separator className="my-6" />
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <p className="text-sm font-medium">Reset to sample data</p>
                 <p className="text-xs text-muted-foreground">
                   Replaces your roadmap with the seeded one. This cannot be undone.
@@ -230,6 +326,33 @@ export function SettingsView() {
           </Card>
         </motion.div>
       </motion.div>
+
+      <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import {pending?.length ?? 0} tasks</DialogTitle>
+            <DialogDescription>
+              Add them to your current {tasks.length} tasks, or replace your whole roadmap
+              with the imported ones. Replacing cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="sm:justify-between">
+            <Button variant="ghost" onClick={() => setPending(null)}>
+              Cancel
+            </Button>
+            <div className="flex gap-2">
+              <RippleButton variant="destructive" onClick={() => runImport("replace")}>
+                Replace all
+              </RippleButton>
+              <RippleButton onClick={() => runImport("merge")}>
+                <Upload />
+                Add to roadmap
+              </RippleButton>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
         <DialogContent className="sm:max-w-md">
