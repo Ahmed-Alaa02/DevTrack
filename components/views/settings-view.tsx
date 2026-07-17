@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Database, Moon, RotateCcw, Sun, User } from "lucide-react";
+import { Database, Moon, RotateCcw, Sun, Trash2, User } from "lucide-react";
 
 import { PageHeader } from "@/components/common/page-header";
 import { RippleButton } from "@/components/common/ripple-button";
@@ -31,8 +31,8 @@ import { useRoadmapStore } from "@/store/use-roadmap-store";
  * Settings.
  *
  * Everything writes straight to the persisted store — there's no Save button
- * because there's nothing to save to. The one destructive action (reset) is the
- * only thing gated behind a confirmation.
+ * because there's nothing to save to. The destructive actions (reset, clear) are
+ * the only things gated behind a confirmation.
  */
 export function SettingsView() {
   const { profile } = useRoadmap();
@@ -40,11 +40,14 @@ export function SettingsView() {
   const theme = useRoadmapStore((s) => s.theme);
   const setTheme = useRoadmapStore((s) => s.setTheme);
   const resetAll = useRoadmapStore((s) => s.resetAll);
+  const clearAll = useRoadmapStore((s) => s.clearAll);
   const tasks = useRoadmapStore((s) => s.tasks);
   const notes = useRoadmapStore((s) => s.notes);
   const hydrated = useHydrated();
 
   const [confirmReset, setConfirmReset] = React.useState(false);
+  const [confirmClear, setConfirmClear] = React.useState(false);
+  const isEmpty = tasks.length === 0 && notes.length === 0;
 
   if (!hydrated) {
     return (
@@ -203,6 +206,27 @@ export function SettingsView() {
                 Reset data
               </Button>
             </div>
+
+            <Separator className="my-6" />
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Clear all data</p>
+                <p className="text-xs text-muted-foreground">
+                  Removes every task, note and day of activity, leaving an empty roadmap
+                  to build from scratch. This cannot be undone.
+                </p>
+              </div>
+              <Button
+                variant="destructive"
+                onClick={() => setConfirmClear(true)}
+                disabled={isEmpty}
+                className="shrink-0"
+              >
+                <Trash2 />
+                Clear data
+              </Button>
+            </div>
           </Card>
         </motion.div>
       </motion.div>
@@ -230,6 +254,35 @@ export function SettingsView() {
             >
               <RotateCcw />
               Yes, reset
+            </RippleButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmClear} onOpenChange={setConfirmClear}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Clear everything?</DialogTitle>
+            <DialogDescription>
+              Your {tasks.length} tasks, {notes.length} notes and all activity history will
+              be deleted, leaving an empty roadmap. Your profile and theme are kept. There
+              is no undo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmClear(false)}>
+              Keep my data
+            </Button>
+            <RippleButton
+              variant="destructive"
+              onClick={() => {
+                clearAll();
+                setConfirmClear(false);
+              }}
+            >
+              <Trash2 />
+              Yes, clear it
             </RippleButton>
           </DialogFooter>
         </DialogContent>

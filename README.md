@@ -5,9 +5,7 @@
 **A premium, dark-first roadmap dashboard for developers.**
 Track learning goals across nine tracks, build a streak, and see where the hours actually went.
 
-<!-- ↓↓↓ REPLACE THIS LINE WITH YOUR VERCEL URL ONCE DEPLOYED ↓↓↓ -->
-### 🔗 [Live Demo](#) &nbsp;·&nbsp; *(deploying — link coming)*
-<!-- e.g. ### 🔗 [Live Demo](https://developer-goals.vercel.app) -->
+### 🔗 [Live Demo](https://dev-track-ahmed.vercel.app/)
 
 ![Next.js](https://img.shields.io/badge/Next.js_15-000000?style=flat-square&logo=next.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)

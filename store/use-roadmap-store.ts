@@ -39,6 +39,8 @@ interface RoadmapState {
   updateProfile: (patch: Partial<UserProfile>) => void;
   setTheme: (theme: ThemeMode) => void;
   resetAll: () => void;
+  /** Empty the roadmap entirely. Profile and theme are preferences, not data, so they stay. */
+  clearAll: () => void;
 }
 
 export interface NewTaskInput {
@@ -284,6 +286,8 @@ export const useRoadmapStore = create<RoadmapState>()(
       setTheme: (theme) => set({ theme }),
 
       resetAll: () => set(createInitialState()),
+
+      clearAll: () => set({ tasks: [], activity: [], notes: [] }),
     }),
     {
       name: STORAGE_KEY,
