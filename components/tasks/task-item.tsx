@@ -9,7 +9,9 @@ import {
   ExternalLink,
   GripVertical,
   MoreHorizontal,
+  Plus,
   Trash2,
+  X,
 } from "lucide-react";
 
 import {
@@ -21,6 +23,7 @@ import {
 } from "@/components/tasks/task-badges";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,6 +83,8 @@ export const TaskItem = React.memo(function TaskItem({
   const [expanded, setExpanded] = React.useState(false);
   const toggleTask = useRoadmapStore((s) => s.toggleTask);
   const toggleSubtask = useRoadmapStore((s) => s.toggleSubtask);
+  const addSubtask = useRoadmapStore((s) => s.addSubtask);
+  const deleteSubtask = useRoadmapStore((s) => s.deleteSubtask);
   const deleteTask = useRoadmapStore((s) => s.deleteTask);
   const fireConfetti = useConfetti();
 
@@ -256,7 +261,12 @@ export const TaskItem = React.memo(function TaskItem({
                 exit="exit"
                 className="overflow-hidden"
               >
-                <TaskDetails task={task} onToggleSubtask={toggleSubtask} />
+                <TaskDetails
+                  task={task}
+                  onToggleSubtask={toggleSubtask}
+                  onAddSubtask={addSubtask}
+                  onDeleteSubtask={deleteSubtask}
+                />
               </motion.div>
             )}
           </AnimatePresence>
@@ -273,17 +283,31 @@ export const TaskItem = React.memo(function TaskItem({
 function TaskDetails({
   task,
   onToggleSubtask,
+  onAddSubtask,
+  onDeleteSubtask,
 }: {
   task: Task;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
+  onAddSubtask: (taskId: string, title: string) => void;
+  onDeleteSubtask: (taskId: string, subtaskId: string) => void;
 }) {
+  const [draft, setDraft] = React.useState("");
+
+  const handleAdd = (event: React.FormEvent) => {
+    event.preventDefault();
+    const clean = draft.trim();
+    if (!clean) return;
+    onAddSubtask(task.id, clean);
+    setDraft("");
+  };
+
   return (
     <div className="mt-3 space-y-4 border-t border-border/70 pt-4">
-      {task.subtasks.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Checklist
-          </p>
+      <div className="space-y-2">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Checklist
+        </p>
+        {task.subtasks.length > 0 && (
           <ul className="space-y-1.5">
             {task.subtasks.map((subtask, index) => (
               <motion.li
@@ -291,8 +315,9 @@ function TaskDetails({
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.03, duration: 0.25, ease: EASE_OUT }}
+                className="group/subtask flex items-center gap-1"
               >
-                <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-secondary/50">
+                <label className="flex flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-secondary/50">
                   <Checkbox
                     checked={subtask.done}
                     onCheckedChange={() => onToggleSubtask(task.id, subtask.id)}
@@ -309,11 +334,39 @@ function TaskDetails({
                     {subtask.title}
                   </span>
                 </label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => onDeleteSubtask(task.id, subtask.id)}
+                  aria-label={`Delete step "${subtask.title}"`}
+                  className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/subtask:opacity-100"
+                >
+                  <X className="size-3.5" />
+                </Button>
               </motion.li>
             ))}
           </ul>
-        </div>
-      )}
+        )}
+        <form onSubmit={handleAdd} className="flex items-center gap-2 pt-0.5">
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Add a step…"
+            aria-label={`Add a step to ${task.title}`}
+            className="h-8 text-xs"
+          />
+          <Button
+            type="submit"
+            variant="ghost"
+            size="icon-sm"
+            disabled={draft.trim().length === 0}
+            aria-label="Add step"
+          >
+            <Plus className="size-4" />
+          </Button>
+        </form>
+      </div>
 
       {task.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">

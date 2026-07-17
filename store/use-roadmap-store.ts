@@ -26,6 +26,8 @@ interface RoadmapState {
   toggleTask: (id: string) => void;
   setTaskProgress: (id: string, progress: number) => void;
   toggleSubtask: (taskId: string, subtaskId: string) => void;
+  addSubtask: (taskId: string, title: string) => void;
+  deleteSubtask: (taskId: string, subtaskId: string) => void;
   addTask: (input: NewTaskInput) => void;
   updateTask: (id: string, patch: Partial<Task>) => void;
   deleteTask: (id: string) => void;
@@ -58,6 +60,23 @@ function statusForProgress(progress: number): Task["status"] {
   if (progress >= 100) return "completed";
   if (progress <= 0) return "not-started";
   return "in-progress";
+}
+
+/**
+ * Re-derive a task's `progress`/`status`/`completedAt` from its checklist. The
+ * checklist is the source of truth whenever a task has one, so every mutation
+ * of `subtasks` (toggle, add, delete) funnels through here to stay consistent.
+ */
+function syncTaskToSubtasks(task: Task): Task {
+  if (task.subtasks.length === 0) return task;
+  const doneCount = task.subtasks.filter((s) => s.done).length;
+  const progress = Math.round((doneCount / task.subtasks.length) * 100);
+  return {
+    ...task,
+    progress,
+    status: statusForProgress(progress),
+    completedAt: progress >= 100 ? todayISO() : null,
+  };
 }
 
 /**
@@ -201,6 +220,37 @@ export const useRoadmapStore = create<RoadmapState>()(
               completedAt: progress >= 100 ? todayISO() : null,
             };
           }),
+        })),
+
+      addSubtask: (taskId, title) =>
+        set((state) => {
+          const clean = title.trim();
+          if (!clean) return state;
+          return {
+            tasks: state.tasks.map((task) =>
+              task.id === taskId
+                ? syncTaskToSubtasks({
+                    ...task,
+                    subtasks: [
+                      ...task.subtasks,
+                      { id: uid("subtask"), title: clean, done: false },
+                    ],
+                  })
+                : task,
+            ),
+          };
+        }),
+
+      deleteSubtask: (taskId, subtaskId) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === taskId
+              ? syncTaskToSubtasks({
+                  ...task,
+                  subtasks: task.subtasks.filter((s) => s.id !== subtaskId),
+                })
+              : task,
+          ),
         })),
 
       addTask: (input) =>
